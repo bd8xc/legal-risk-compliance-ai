@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pdfplumber
+python-docx
+spacy
+transformers
+torch
+chromadb
+faiss-cpu
+pydantic
+numpy
+scikit-learn
