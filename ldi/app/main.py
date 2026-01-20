@@ -29,7 +29,7 @@ async def ingest_document(file: UploadFile = File(...)):
 
 
 @app.post("/chunk/")
-async def chunk_document(file: UploadFile = File(...), semantic_validation: bool = False):
+async def chunk_document(file: UploadFile = File(...)):
 	temp_path = f"temp_{file.filename}"
 	with open(temp_path, "wb") as buffer:
 		shutil.copyfileobj(file.file, buffer)
@@ -42,7 +42,7 @@ async def chunk_document(file: UploadFile = File(...), semantic_validation: bool
 			os.remove(temp_path)
 			return {"error": "Unsupported file type"}
 		cleaned = clean_text(text)
-		clauses = split_clauses(cleaned, semantic_validation=semantic_validation)
+		clauses = split_clauses(cleaned)
 	finally:
 		os.remove(temp_path)
 	return {"clauses": clauses, "count": len(clauses)}

@@ -102,14 +102,9 @@ def normalize_clause_number(raw: str) -> str | None:
 
 
 # Generate a unique clause ID based on clause number, section, or fallback to index
+
+# Always generate clause IDs in the format 'clause_<index>' for consistency
 def make_clause_id(section: str | None, clause_number: str | None, index: int) -> str:
-	if clause_number:
-		return clause_number
-	if section:
-		# Sanitize section name for use in ID
-		safe = re.sub(r"[^A-Za-z0-9]+", "_", section).strip("_").lower()
-		safe = safe[:40] if safe else "section"
-		return f"{safe}_{index}"
 	return f"clause_{index}"
 
 
