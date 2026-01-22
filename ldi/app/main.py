@@ -1,65 +1,85 @@
 
+# FastAPI and file utilities for API and temp file handling
 from fastapi import FastAPI, UploadFile, File
-from ldi.ingestion.pdf_loader import load_pdf
-from ldi.ingestion.docx_loader import load_docx
-from ldi.ingestion.cleaner import clean_text
-from ldi.chunking.clause_splitter import split_clauses
 import shutil
 import os
 
+# PDF loader: extracts both text and tables from PDF
+from ldi.ingestion.pdf_table_loader import extract_pdf_text_and_tables
+# DOCX loader: extracts both text and tables from DOCX
+from ldi.ingestion.docx_loader import load_docx
+# Clause chunker: splits text into legal clause objects
+from ldi.chunking.clause_splitter import split_clauses
+
+# Initialize FastAPI app
 app = FastAPI()
 
+
+
+# ==============================
+# INGEST ENDPOINT: Extracts text and tables from uploaded PDF or DOCX
+# ==============================
 @app.post("/ingest/")
 async def ingest_document(file: UploadFile = File(...)):
-	temp_path = f"temp_{file.filename}"
-	with open(temp_path, "wb") as buffer:
-		shutil.copyfileobj(file.file, buffer)
-	try:
-		if file.filename.lower().endswith(".pdf"):
-			text = load_pdf(temp_path)
-		elif file.filename.lower().endswith(".docx"):
-			text = load_docx(temp_path)
-		else:
-			os.remove(temp_path)
-			return {"error": "Unsupported file type"}
-		cleaned = clean_text(text)
-	finally:
-		os.remove(temp_path)
-	return {"text": cleaned}
+    # Save uploaded file to a temporary path
+    temp_path = f"temp_{file.filename}"
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    try:
+        # PDF: extract text and tables
+        if file.filename.lower().endswith(".pdf"):
+            result = extract_pdf_text_and_tables(temp_path)
+        # DOCX: extract text and tables
+        elif file.filename.lower().endswith(".docx"):
+            result = load_docx(temp_path)
+        # Unsupported file type
+        else:
+            return {"error": "Unsupported file type"}
+    finally:
+        # Always remove temp file
+        os.remove(temp_path)
+
+    # Return dict: {"text": ..., "tables": ...}
+    return result
 
 
+
+# ==============================
+# CHUNK ENDPOINT: Splits text into legal clauses and returns tables
+# ==============================
 @app.post("/chunk/")
 async def chunk_document(file: UploadFile = File(...)):
-	temp_path = f"temp_{file.filename}"
-	with open(temp_path, "wb") as buffer:
-		shutil.copyfileobj(file.file, buffer)
-	try:
-		if file.filename.lower().endswith(".pdf"):
-			text = load_pdf(temp_path)
-		elif file.filename.lower().endswith(".docx"):
-			text = load_docx(temp_path)
-		else:
-			os.remove(temp_path)
-			return {"error": "Unsupported file type"}
-		cleaned = clean_text(text)
-		clauses = split_clauses(cleaned)
-	finally:
-		os.remove(temp_path)
-	return {"clauses": clauses, "count": len(clauses)}
+    # Save uploaded file to a temporary path
+    temp_path = f"temp_{file.filename}"
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-if __name__ == "__main__":
-	# Manual test: load and clean a sample PDF and DOCX
-	pdf_path = "sample_contract.pdf"  # Place a sample file in project root
-	docx_path = "sample_contract.docx"
-	try:
-		pdf_text = load_pdf(pdf_path)
-		print("PDF Loaded. Preview:")
-		print(clean_text(pdf_text)[:300])
-	except Exception as e:
-		print(f"PDF load failed: {e}")
-	try:
-		docx_text = load_docx(docx_path)
-		print("DOCX Loaded. Preview:")
-		print(clean_text(docx_text)[:300])
-	except Exception as e:
-		print(f"DOCX load failed: {e}")
+    try:
+        # PDF: extract text and tables
+        if file.filename.lower().endswith(".pdf"):
+            result = extract_pdf_text_and_tables(temp_path)
+        # DOCX: extract text and tables
+        elif file.filename.lower().endswith(".docx"):
+            result = load_docx(temp_path)
+        # Unsupported file type
+        else:
+            return {"error": "Unsupported file type"}
+
+        # Get extracted text and tables
+        text = result["text"]
+        tables = result["tables"]
+
+        # Split text into legal clause objects
+        clauses = split_clauses(text)
+    finally:
+        # Always remove temp file
+        os.remove(temp_path)
+
+    # Return both clauses and tables, with counts
+    return {
+        "clauses": clauses,
+        "tables": tables,
+        "clause_count": len(clauses),
+        "table_count": len(tables)
+    }
