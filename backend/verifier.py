@@ -1,113 +1,138 @@
-from typing import Dict, List
 import re
-from utils import normalize_text
+from typing import Dict, List, Any
 
 
-SEVERITY = {
-    "LOW": 1,
-    "MEDIUM": 2,
-    "HIGH": 3,
-    "CRITICAL": 4,
+# -----------------------------
+# Known / allowed legal authorities (minimal, expandable)
+# -----------------------------
+
+KNOWN_LAWS = {
+    "computer fraud and abuse act",
+    "information technology act",
+    "indian penal code",
+    "computer misuse act",
+    "criminal code of canada",
+    "general data protection regulation",
+    "cybersecurity act",
 }
 
-OVER_CERTAINTY_PATTERNS = [
-    r"\balways\b",
-    r"\bnever\b",
-    r"\bguaranteed\b",
-    r"\bwithout exception\b",
+# Common hallucination-style law name patterns
+SUSPICIOUS_TERMS = [
+    "supreme",
+    "fundamental",
+    "attribution",
+    "universal",
+    "global cyber",
+    "constitutional cyber",
 ]
 
-FAKE_AUTHORITY_PATTERNS = [
-    r"\bsupreme court has ruled\b",
-    r"\bsettled law\b",
-    r"\bwell established\b",
-]
 
-STATUTE_PATTERN = re.compile(
-    r"\b(section|sec|article)\s+\d+\b", re.IGNORECASE
-)
+# -----------------------------
+# Fabricated legal authority detection (STEP 1)
+# -----------------------------
 
+def detect_fabricated_legal_authority(answer: str) -> List[Dict[str, Any]]:
+    """
+    Detect references to fabricated, suspicious, or unverifiable legal authorities.
+    This is a Tier-5 hallucination check.
+    """
+
+    signals: List[Dict[str, Any]] = []
+
+    # Detect capitalized law-like phrases
+    matches = re.findall(
+        r"([A-Z][A-Za-z\s]+?\s(?:Act|Law|Directive|Regulation|Code))",
+        answer
+    )
+
+    for match in matches:
+        law_name = match.lower().strip()
+
+        # Strong hallucination smell
+        if any(term in law_name for term in SUSPICIOUS_TERMS):
+            signals.append({
+                "signal": "Fabricated or suspicious legal authority detected",
+                "severity": 5,
+                "suggested_fix": (
+                    "Remove reference to non-existent or suspiciously named legal authority "
+                    "and replace with a high-level legal description"
+                )
+            })
+            continue
+
+        # Unverifiable / unknown law
+        if law_name not in KNOWN_LAWS:
+            signals.append({
+                "signal": "Unverifiable legal authority referenced",
+                "severity": 5,
+                "suggested_fix": (
+                    "Avoid naming specific statutes; describe the legal principle instead"
+                )
+            })
+
+    return signals
+
+
+# -----------------------------
+# Existing verifier entrypoint
+# -----------------------------
 
 def verify_answer(
     question: str,
     answer: str,
     jurisdiction: str,
     multi_jurisdiction: bool = False
-) -> Dict:
+) -> Dict[str, Any]:
+    """
+    Verify the generated answer for hallucinations, inconsistencies,
+    and unsafe legal claims.
+    """
 
-    q = normalize_text(question)
-    a = normalize_text(answer)
+    hallucination_signals: List[Dict[str, Any]] = []
 
-    signals: List[Dict] = []
+    # -----------------------------
+    # STEP 1: Fabricated authority detection (HARD FAIL)
+    # -----------------------------
+    fabricated_signals = detect_fabricated_legal_authority(answer)
+    if fabricated_signals:
+        return {
+            "verification": "FAILED",
+            "hallucination_signals": fabricated_signals
+        }
 
-    def add(signal, severity, fix):
-        signals.append({
-            "signal": signal,
-            "severity": severity,
-            "suggested_fix": fix
+    # -----------------------------
+    # Existing / softer checks
+    # -----------------------------
+
+    lowered = answer.lower()
+
+    # Overly absolute language
+    if any(word in lowered for word in ["always", "never", "guaranteed", "automatically"]):
+        hallucination_signals.append({
+            "signal": "Overly absolute legal language",
+            "severity": 1,
+            "suggested_fix": "Use conditional or qualified legal phrasing"
         })
 
-    # Over-certainty
-    if any(re.search(p, a) for p in OVER_CERTAINTY_PATTERNS):
-        add(
-            "Overly absolute legal language",
-            SEVERITY["LOW"],
-            "Use conditional or qualified legal phrasing"
-        )
-
-    # Fake authority
-    if any(re.search(p, a) for p in FAKE_AUTHORITY_PATTERNS):
-        add(
-            "Unverifiable legal authority referenced",
-            SEVERITY["HIGH"],
-            "Remove uncited references to courts or precedents"
-        )
-
-    # Statute hallucination
-    if STATUTE_PATTERN.search(a):
-        add(
-            "Specific statute numbers cited without verification",
-            SEVERITY["CRITICAL"],
-            "Replace statute numbers with high-level legal descriptions"
-        )
-
-    # Jurisdiction leakage
-    leaks = {
-        "india": ["cfaa", "united states", "uk law"],
-        "us": ["ipc", "it act", "india"],
-        "uk": ["cfaa", "ipc", "it act", "eu law"],
-        "eu": ["ipc", "cfaa", "uk law"],
-    }
-
-    if any(w in a for w in leaks.get(jurisdiction, [])):
-        add(
-            "Jurisdictional inconsistency detected",
-            SEVERITY["HIGH"],
-            "Restrict legal analysis to the correct jurisdiction"
-        )
-
-    # EU category error
-    if jurisdiction == "eu":
-        if "gdpr" in a and any(w in a for w in ["crime", "criminal", "imprisonment"]):
-            add(
-                "EU law treated as criminal law",
-                SEVERITY["CRITICAL"],
-                "Clarify distinction between EU regulations and member-state criminal law"
+    # Jurisdictional mismatch hints
+    if jurisdiction == "eu" and any(word in lowered for word in ["prison", "imprisonment"]):
+        hallucination_signals.append({
+            "signal": "EU law treated as criminal law",
+            "severity": 4,
+            "suggested_fix": (
+                "Clarify that EU law harmonizes rules but criminal penalties "
+                "are imposed by member states"
             )
+        })
 
-    # Topic drift
-    overlap = len(set(q.split()) & set(a.split()))
-    if overlap < 5:
-        add(
-            "Answer may not directly address the question",
-            SEVERITY["MEDIUM"],
-            "Refocus answer on the legal issue raised"
-        )
-
-    max_severity = max([s["severity"] for s in signals], default=0)
+    # Final decision
+    if any(sig["severity"] >= 4 for sig in hallucination_signals):
+        return {
+            "verification": "FAILED",
+            "hallucination_signals": hallucination_signals
+        }
 
     return {
-        "verification": "PASSED" if max_severity < SEVERITY["HIGH"] else "FAILED",
-        "max_severity": max_severity,
-        "hallucination_signals": signals
+        "verification": "PASSED",
+        "hallucination_signals": hallucination_signals
     }
