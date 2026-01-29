@@ -37,6 +37,9 @@ ROMAN_RE   = re.compile(r"^\(?([ivxlcdm]+)[\)\.]?\s+(.*)", re.I)
 # Numeric bullets inside subclauses (e.g., 1) Labor ... under a lettered item)
 SUBNUM_RE  = re.compile(r"^\(?([0-9]+)[\)\.]?\s+(.*)")
 
+# Definitions (e.g., "Effective Date" means ...)
+DEFINITION_RE = re.compile(r'^"([^"]+)"\s+(means|shall mean|refers to)', re.I)
+
 # GENERIC TABLE DETECTION
 # Matches lines containing tabs OR sequences of 3+ spaces.
 # Why 3 spaces? It's a common heuristic for visually aligned columns in plain text.
@@ -56,12 +59,12 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
-def semantic_cleanup(text: str, threshold: float = 0.92) -> str:
+def semantic_cleanup(text: str, threshold: float = 0.8) -> str:
     """
     Merges lines within a clause if they are semantically continuous.
     
     HOW:
-    - If Line A and Line B have similarity > 0.92, we assume Line B
+    - If Line A and Line B have similarity > 0.8, we assume Line B
       is a continuation of Line A (broken by PDF formatting).
     - If similarity is lower, Line B is likely a new thought/bullet.
     """
@@ -88,12 +91,17 @@ def semantic_cleanup(text: str, threshold: float = 0.92) -> str:
 def looks_like_table_row(line: str) -> bool:
     """
     Heuristic: Does this line look like a table row?
-    Criteria: Must split into at least 3 distinct columns based on spacing/tabs.
+    Criteria:
+    - Splits into at least 3 columns based on spacing/tabs
+    - At least 2 cells are short (< 40 chars)
     """
     parts = TABLE_SPLIT_RE.split(line.strip())
     # Filter empty strings that might result from splitting
     parts = [p for p in parts if p.strip()]
-    return len(parts) >= 3
+    if len(parts) < 3:
+        return False
+    short_cells = sum(1 for p in parts if len(p) < 40)
+    return short_cells >= 2
 
 
 def extract_tables(lines: List[str]):
@@ -123,31 +131,41 @@ def extract_tables(lines: List[str]):
         # CHECK: Is this the start of a table?
         if looks_like_table_row(line):
             table_lines = []
-            
+
             # Consume all consecutive lines that look like table rows
             while i < len(lines) and looks_like_table_row(lines[i]):
                 table_lines.append(lines[i].strip())
                 i += 1
 
-            # We need at least 2 lines (Header + Data) to form a valid table
-            if len(table_lines) >= 2:
-                # Split all rows by the separator regex
-                rows = [TABLE_SPLIT_RE.split(r) for r in table_lines]
-                
-                # HEADERS: Inferred from the first row found
-                # Normalize: "Unit Price" -> "unit_price"
-                headers = [h.lower().strip().replace(" ", "_") for h in rows[0] if h.strip()]
-                
+            is_valid_table = False
+            rows: List[List[str]] = []
+            headers: List[str] = []
+
+            # We need header + at least 2 data rows
+            if len(table_lines) >= 3:
+                # Split all rows by the separator regex and clean empties
+                for r in table_lines:
+                    row_parts = [p for p in TABLE_SPLIT_RE.split(r) if p.strip()]
+                    rows.append(row_parts)
+
+                # Column consistency rule: max(cols) - min(cols) <= 1
+                col_counts = [len(r) for r in rows]
+                if col_counts and (max(col_counts) - min(col_counts) <= 1):
+                    # Headers inferred from first row
+                    headers = [h.lower().strip().replace(" ", "_") for h in rows[0] if h.strip()]
+
+                    # Header sanity rule: reject if any header cell too long
+                    if headers and all(len(h) <= 60 for h in headers):
+                        is_valid_table = True
+
+            if is_valid_table:
                 structured_rows = []
                 for row_data in rows[1:]:
-                    # Clean empty splits
-                    row_data = [d for d in row_data if d.strip()]
-                    
-                    # Safety: Ensure row length matches header length. 
+                    # Safety: Ensure row length matches header length.
                     # Pad with empty strings if short (common in messy OCR).
                     if len(row_data) < len(headers):
                         row_data += [""] * (len(headers) - len(row_data))
-                    
+
                     # Create the dictionary for this row
                     # zip stops at the shortest length, so we handle mapping safely
                     structured_rows.append(dict(zip(headers, row_data)))
@@ -158,7 +176,10 @@ def extract_tables(lines: List[str]):
                     "headers": headers,      # The inferred schema
                     "rows": structured_rows  # The data
                 })
-            
+            else:
+                # Rejected table block: return lines to cleaned text
+                cleaned.extend(table_lines)
+
             # Continue main loop (we already incremented i inside the inner while)
             continue
 
@@ -208,6 +229,8 @@ def split_clauses(text: str) -> List[Dict[str, Any]]:
     
     # Text Buffer for current clause
     buffer: List[str] = []
+    current_type: Optional[str] = None
+    current_term: Optional[str] = None
 
     # --- HELPERS ---
 
@@ -243,7 +266,7 @@ def split_clauses(text: str) -> List[Dict[str, Any]]:
 
     def flush(level="clause"):
         """Commits the current buffer to the results list."""
-        nonlocal buffer, loose_counter
+        nonlocal buffer, loose_counter, current_type, current_term
         if not buffer:
             return
 
@@ -256,18 +279,35 @@ def split_clauses(text: str) -> List[Dict[str, Any]]:
             loose_counter += 1
             clause_id = f"P{loose_counter}"
 
-        results.append({
+        entry = {
             "clause_id": clause_id,
             "section": section_name,
             "level": level,
             "text": semantic_cleanup(text_block) # Fix broken lines before saving
-        })
+        }
+        if current_type:
+            entry["type"] = current_type
+        if current_term:
+            entry["term"] = current_term
+        results.append(entry)
+
+        current_type = None
+        current_term = None
 
     # --- MAIN PARSER LOOP ---
 
     for raw in lines:
         line = raw.strip()
         if not line:
+            continue
+
+        # DEFINITIONS (e.g., "Effective Date" means ...)
+        m = DEFINITION_RE.match(line)
+        if m:
+            flush()
+            current_type = "definition"
+            current_term = m.group(1).strip()
+            buffer.append(line)
             continue
 
         # LEVEL 1: ARTICLES ("ARTICLE 1")

@@ -1,3 +1,5 @@
+# Ignore chunk quality report CSV
+ldi/chunk_quality_report.csv
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
