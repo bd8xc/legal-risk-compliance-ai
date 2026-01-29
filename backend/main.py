@@ -15,11 +15,11 @@ from confidence import (
 from logger import log_request
 from verifier import verify_answer
 from utils import normalize_text
-from grounding import get_grounding_context
+from premise_validator import validate_premise
+from feedback import build_feedback
 
 
 app = FastAPI(title="Legal Question Backend")
-
 
 # ------------------
 # Models
@@ -44,6 +44,7 @@ class QuestionResponse(BaseModel):
     timestamp: str
     verification: Optional[str] = None
     hallucination_signals: Optional[List[Dict[str, Any]]] = None
+    feedback: Optional[Dict[str, str]] = None
     answer: Optional[str] = None
 
 
@@ -79,11 +80,14 @@ def ask(payload: QuestionRequest):
     question = payload.question
     q_norm = normalize_text(question)
 
+    # ---- Classification ----
     is_legal = is_legal_question(question)
     classification = "legal" if is_legal else "general"
 
+    # ---- Domain extraction ----
     domains = extract_domains(question) if is_legal else []
 
+    # ---- Jurisdiction resolution ----
     jurisdiction, jurisdiction_reason = resolve_jurisdiction(
         question,
         payload.jurisdiction
@@ -102,42 +106,80 @@ def ask(payload: QuestionRequest):
         "timestamp": datetime.utcnow().isoformat(),
     }
 
-    # ---- HARD SAFETY: explicit jurisdiction but unresolved ----
+    # ======================================================
+    # STEP 2 — Premise validation (SEMANTIC-FIRST)
+    # ======================================================
+    if classification == "legal":
+        premise_check = validate_premise(
+            question=question,
+            jurisdiction=jurisdiction,
+            domains=domains
+        )
+
+        if premise_check["status"] != "premise_valid":
+            response.update({
+                "status": premise_check["status"],
+                "verification": "FAILED",
+                "answer": None,
+                "hallucination_signals": [{
+                    "signal": premise_check["reason"],
+                    "severity": 5,
+                    "suggested_fix": premise_check["suggested_action"]
+                }],
+                "feedback": build_feedback(
+                    premise_check["reason"],
+                    premise_check["suggested_action"]
+                )
+            })
+            return response
+
+    # ======================================================
+    # HARD SAFETY — explicit jurisdiction but unresolved
+    # ======================================================
     if (
         classification == "legal"
         and jurisdiction_reason.startswith("No jurisdiction")
-        and re.search(r"\b(us|uk|eu|united states|united kingdom|european union)\b", q_norm)
+        and re.search(
+            r"\b(us|uk|eu|united states|united kingdom|european union|canada|china)\b",
+            q_norm
+        )
     ):
-        response["status"] = "jurisdiction_unresolved"
-        response["verification"] = "FAILED"
-        response["answer"] = None
-        response["hallucination_signals"] = [{
-            "signal": "Explicit jurisdiction mentioned but not resolved",
-            "severity": 4,
-            "suggested_fix": "Improve jurisdiction detection before answering"
-        }]
+        response.update({
+            "status": "jurisdiction_unresolved",
+            "verification": "FAILED",
+            "answer": None,
+            "hallucination_signals": [{
+                "signal": "Explicit jurisdiction mentioned but not resolved",
+                "severity": 4,
+                "suggested_fix": "Improve jurisdiction detection before answering"
+            }],
+            "feedback": build_feedback(
+                "Explicit jurisdiction mentioned but not resolved",
+                "Specify a recognized country or remove jurisdictional assumptions."
+            )
+        })
         return response
 
+    # ---- LLM invocation ----
     llm_called = False
 
     if payload.generate_answer and classification == "legal":
         llm_called = True
 
-        grounding = get_grounding_context(jurisdiction, domains)
-
         candidate = generate_legal_answer(
             question,
             domains,
             jurisdiction,
-            jurisdiction_reason,
-            grounding=grounding
+            jurisdiction_reason
         )
 
         verification = verify_answer(
             question,
             candidate,
             jurisdiction,
-            multi_jurisdiction=bool(re.search(r"\b(and|or|vs|versus)\b", q_norm))
+            multi_jurisdiction=bool(
+                re.search(r"\b(and|or|vs|versus)\b", q_norm)
+            )
         )
 
         response["verification"] = verification["verification"]
@@ -149,6 +191,7 @@ def ask(payload: QuestionRequest):
             response["status"] = "verification_failed"
             response["answer"] = None
 
+    # ---- Logging ----
     log_request({
         "question": question,
         "classification": classification,
@@ -157,5 +200,5 @@ def ask(payload: QuestionRequest):
         "llm_called": llm_called,
         "verification": response.get("verification"),
     })
-
+    
     return response
