@@ -1,5 +1,4 @@
-
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Body
 from fastapi import APIRouter
 from typing import List
 import shutil
@@ -12,9 +11,43 @@ from ldi.ingestion.docx_loader import load_docx
 # Clause chunker: splits text into legal clause objects
 from ldi.chunking.clause_splitter import split_clauses
 
+# Embedding pipeline
+from ldi.embeddings.pipeline import embed_and_store
+# Search pipeline
+from ldi.search.pipeline import search_clauses
+
 # Initialize FastAPI app
 
 app = FastAPI()
+
+
+# ==============================
+# EMBED ENDPOINT: Embeds and stores legal clauses from uploaded PDF or DOCX
+# ==============================
+from fastapi import HTTPException
+
+@app.post("/embed/")
+async def embed_document(file: UploadFile = File(...)):
+    """
+    Extracts, chunks, embeds, and stores legal clauses from a document.
+    Returns number of clauses indexed and status.
+    """
+    temp_path = f"temp_{file.filename}"
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    try:
+        if file.filename.lower().endswith(".pdf"):
+            result = extract_pdf_text_and_tables(temp_path)
+        elif file.filename.lower().endswith(".docx"):
+            result = load_docx(temp_path)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+        text = result["text"]
+        clauses = split_clauses(text)
+        stats = embed_and_store(clauses, file.filename)
+    finally:
+        os.remove(temp_path)
+    return {"clauses_indexed": stats["clauses"], "status": "success"}
 
 
 
@@ -122,3 +155,19 @@ async def chunk_documents(files: List[UploadFile] = File(...)):
         finally:
             os.remove(temp_path)
     return results
+
+
+# ==============================
+# SEARCH ENDPOINT: Semantic search for legal clauses
+# ==============================
+@app.post("/search/")
+async def search_endpoint(body: dict = Body(...)):
+    """
+    Semantic search for legal clauses.
+    Body: {"query": str, "k": int}
+    Returns: {"results": [...]} 
+    """
+    query = body.get("query", "")
+    k = body.get("k", 5)
+    results = search_clauses(query, k)
+    return {"results": results}
