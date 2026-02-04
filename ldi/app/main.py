@@ -3,6 +3,8 @@ from fastapi import APIRouter
 from typing import List
 import shutil
 import os
+from ldi.search.pipeline import search_clauses
+from pydantic import BaseModel
 
 # PDF loader: extracts both text and tables from PDF
 from ldi.ingestion.pdf_table_loader import extract_pdf_text_and_tables
@@ -15,6 +17,11 @@ from ldi.chunking.clause_splitter import split_clauses
 from ldi.embeddings.pipeline import embed_and_store
 # Search pipeline
 from ldi.search.pipeline import search_clauses
+from pydantic import BaseModel
+
+class SearchRequest(BaseModel):
+    query: str
+    k: int = 5
 
 # Initialize FastAPI app
 
@@ -156,18 +163,49 @@ async def chunk_documents(files: List[UploadFile] = File(...)):
             os.remove(temp_path)
     return results
 
+@app.post("/embed-multi/")
+async def embed_documents(files: List[UploadFile] = File(...)):
+    """
+    Embeds and stores legal clauses from multiple uploaded PDF or DOCX files.
+    Returns a list of results per file.
+    """
+    results = []
+    for file in files:
+        temp_path = f"temp_{file.filename}"
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        try:
+            if file.filename.lower().endswith(".pdf"):
+                result = extract_pdf_text_and_tables(temp_path)
+            elif file.filename.lower().endswith(".docx"):
+                result = load_docx(temp_path)
+            else:
+                results.append({"filename": file.filename, "error": "Unsupported file type"})
+                continue
+            text = result["text"]
+            clauses = split_clauses(text)
+            stats = embed_and_store(clauses, file.filename)
+            results.append({
+                "filename": file.filename,
+                "clauses_indexed": stats["clauses"],
+                "status": "success"
+            })
+        finally:
+            os.remove(temp_path)
+    return results
+
+
 
 # ==============================
 # SEARCH ENDPOINT: Semantic search for legal clauses
 # ==============================
 @app.post("/search/")
-async def search_endpoint(body: dict = Body(...)):
+async def search_endpoint(body: SearchRequest = Body(...)):
     """
     Semantic search for legal clauses.
     Body: {"query": str, "k": int}
     Returns: {"results": [...]} 
     """
-    query = body.get("query", "")
-    k = body.get("k", 5)
-    results = search_clauses(query, k)
+    results = search_clauses(body.query, body.k)
     return {"results": results}
+

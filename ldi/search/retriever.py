@@ -43,6 +43,7 @@ class ClauseRetriever:
                 "clause_id": meta.get("clause_id"),
                 "section": meta.get("section"),
                 "level": meta.get("level"),
+                "file_name": meta.get("file_name"),
                 "text": documents[i] if i < len(documents) else None,
                 "score": float(scores[i]) if scores and i < len(scores) and scores[i] is not None else None
             })
