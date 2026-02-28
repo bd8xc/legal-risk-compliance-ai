@@ -25,7 +25,8 @@ class ClauseVectorStore:
         """
         if not ids or len(ids) != len(texts) or len(ids) != len(embeddings) or len(ids) != len(metadatas):
             raise ValueError("Input lists must be non-empty and of equal length.")
-        self._collection.add(
+        # Use upsert so re-indexing the same IDs updates rows instead of failing.
+        self._collection.upsert(
             ids=ids,
             documents=texts,
             embeddings=embeddings.tolist(),

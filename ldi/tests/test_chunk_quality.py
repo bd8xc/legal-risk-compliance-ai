@@ -129,6 +129,7 @@ def test_pdf_chunk_quality():
         # Fail the test if any failed
         assert False, f"{failed} PDFs failed quality gates: {', '.join(failed_files)}"
 
-    # Save metrics
+    # Save metrics in the tests directory
     df = pd.DataFrame(reports)
-    df.to_csv("chunk_quality_report.csv", index=False)
+    out_csv = os.path.join(os.path.dirname(__file__), "chunk_quality_report.csv")
+    df.to_csv(out_csv, index=False)
