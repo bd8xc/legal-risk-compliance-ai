@@ -177,61 +177,62 @@ async def chunk_documents(files: List[UploadFile] = File(...)):
     return results
 
 
-# @app.post("/embed-multi/")
-# async def embed_documents(files: List[UploadFile] = File(...)):
-#     """
-#     Embeds and stores legal clauses from multiple uploaded PDF or DOCX files.
-#     Returns a list of results per file.
-#     """
-#     results = []
-#     for file in files:
-#         temp_path = f"temp_{file.filename}"
-#         with open(temp_path, "wb") as buffer:
-#             shutil.copyfileobj(file.file, buffer)
-#         try:
-#             if file.filename.lower().endswith(".pdf"):
-#                 result = extract_pdf_text_and_tables(temp_path)
-#             elif file.filename.lower().endswith(".docx"):
-#                 result = load_docx(temp_path)
-#             else:
-#                 results.append({"filename": file.filename, "error": "Unsupported file type"})
-#                 continue
-#             text = result["text"]
-#             clauses = split_clauses(text)
-#
-#             for table_index, table in enumerate(result.get("tables", []) or [], start=1):
-#                 table_text = "\n".join(["\t".join(row) for row in table])
-#                 clauses.append(
-#                     {
-#                         "clause_id": f"TABLE_{table_index}",
-#                         "section": f"Table {table_index}",
-#                         "level": "table",
-#                         "text": table_text,
-#                     }
-#                 )
-#             stats = embed_and_store(clauses, file.filename)
-#             results.append({
-#                 "filename": file.filename,
-#                 "clauses_indexed": stats["clauses"],
-#                 "status": "success"
-#             })
-#         finally:
-#             os.remove(temp_path)
-#     return results
+@app.post("/embed-multi/")
+async def embed_documents(files: List[UploadFile] = File(...)):
+    """
+    Embeds and stores legal clauses from multiple uploaded PDF or DOCX files.
+    Returns a list of results per file.
+    """
+    results = []
+    for file in files:
+        temp_path = f"temp_{file.filename}"
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        try:
+            if file.filename.lower().endswith(".pdf"):
+                result = extract_pdf_text_and_tables(temp_path)
+            elif file.filename.lower().endswith(".docx"):
+                result = load_docx(temp_path)
+            else:
+                results.append({"filename": file.filename, "error": "Unsupported file type"})
+                continue
+            text = result["text"]
+            clauses = split_clauses(text)
+
+            for table_index, table in enumerate(result.get("tables", []) or [], start=1):
+                table_text = "\n".join(["\t".join(row) for row in table])
+                clauses.append(
+                    {
+                        "clause_id": f"TABLE_{table_index}",
+                        "section": f"Table {table_index}",
+                        "level": "table",
+                        "text": table_text,
+                    }
+                )
+            stats = embed_and_store(clauses, file.filename)
+            results.append({
+                "filename": file.filename,
+                "clauses_indexed": stats["clauses"],
+                "status": "success"
+            })
+        finally:
+            os.remove(temp_path)
+    return results
 
 
 
-# ==============================
-# SEARCH ENDPOINT: Semantic search for legal clauses
-# ==============================
+    # ==============================
+    # SEARCH ENDPOINT: Semantic search for legal clauses
+    # ==============================
 
-# @app.post("/search/")
-# async def search_endpoint(body: SearchRequest = Body(...)):
-#     """
-#     Semantic search for legal clauses.
-#     Body: {"query": str, "k": int}
-#     Returns: {"results": [...]} 
-#     """
-#     results = search_clauses(body.query, body.k)
-#     return {"results": results}
+
+@app.post("/search/")
+async def search_endpoint(body: SearchRequest = Body(...)):
+    """
+    Semantic search for legal clauses.
+    Body: {"query": str, "k": int}
+    Returns: {"results": [...]} 
+    """
+    results = search_clauses(body.query, body.k)
+    return {"results": results}
 
