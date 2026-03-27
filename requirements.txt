@@ -1,0 +1,7 @@
+kuzu
+spacy
+pypdf
+requests
+langgraph
+langchain
+langchain-community
