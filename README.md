@@ -1,4 +1,3 @@
-````markdown
 # LEXGUARD - Phase 1: Institutional Memory (Knowledge Graph Pipeline)
 
 This module handles the ingestion of unstructured legal documents (like Lease Agreements and NDAs) and converts them into a structured, queryable KùzuDB Knowledge Graph. It uses a Neuro-Symbolic architecture optimized for low-RAM local environments.
@@ -19,7 +18,7 @@ This module handles the ingestion of unstructured legal documents (like Lease Ag
    ```bash
    ollama pull qwen2.5:3b
    ```
-````
+
 
 ## Installation
 
