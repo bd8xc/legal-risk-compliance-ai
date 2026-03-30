@@ -1,57 +1,92 @@
-import re
 from graph_manager import graph
 
-def normalize(name):
+def ingest_document_data(doc_meta, chunk_meta, entities, relationships):
     """
-    Standardizes names so the graph can link 'Alpha Corp, Inc.' and 'Alpha Corp'.
+    Inserts extracted data into the KuzuDB graph using the strict Module Schema.
+    Now properly links Entities directly to the specific Clause they were found in.
     """
-    n = name.lower().strip()
-    # Remove punctuation
-    n = re.sub(r'[^a-z0-9 ]', '', n)
-    # Strip common corporate suffixes
-    suffixes = [' inc', ' corp', ' ltd', ' llc', ' limited', ' corporation']
-    for s in suffixes:
-        if n.endswith(s):
-            n = n[:-len(s)].strip()
-    return n
-
-def ingest_document_data(doc_meta, entities, relationships):
-    """
-    Links entities and relations from a document into the Knowledge Graph.
-    """
-    # 1. Register the Source Document
-    graph.execute(
-        "MERGE (s:Source {doc_id: $id}) SET s.doc_type = $type, s.filename = $fname",
-        {"id": doc_meta['id'], "type": doc_meta['type'], "fname": doc_meta['filename']}
-    )
-
-    # 2. Add Entities and link to the Source (Provenance)
-    for ent in entities:
-        norm = normalize(ent['name'])
-        
-        # FIX: MERGE on the normalized name! This prevents duplicates.
-        graph.execute(
-            "MERGE (e:Entity {name: $norm}) SET e.label = $label, e.normalized_name = $norm",
-            {"norm": norm, "label": ent['label']}
-        )
-        
-        # Connect Entity -> Source using the normalized name
-        graph.execute(
-            "MATCH (e:Entity {name: $en}), (s:Source {doc_id: $sid}) MERGE (e)-[:MENTIONED_IN]->(s)",
-            {"en": norm, "sid": doc_meta['id']}
-        )
-
-    # 3. Add Entity-to-Entity Relationships
-    for rel in relationships:
-        # FIX: We must also normalize the relationship source/target to match our nodes
-        src_norm = normalize(rel['from'])
-        tgt_norm = normalize(rel['to'])
-        rel_type = rel['type'].upper().replace(" ", "_")
-        
-        graph.execute(
-            f"MATCH (a:Entity {{name: $src}}), (b:Entity {{name: $tgt}}) "
-            f"MERGE (a)-[r:RELATES_TO {{type: $rtype}}]->(b)",
-            {"src": src_norm, "tgt": tgt_norm, "rtype": rel_type}
-        )
+    doc_id = doc_meta.get("id", "UNKNOWN_DOC")
+    doc_type = doc_meta.get("type", "UNKNOWN_TYPE")
+    filename = doc_meta.get("filename", "UNKNOWN_FILE")
     
-    print(f"📈 Integrated {len(entities)} nodes from '{doc_meta['filename']}'")
+    clause_id = chunk_meta.get("clause_id")
+    clause_text = chunk_meta.get("text", "").replace('"', "'") # Escape quotes for Cypher
+
+    try:
+        # 1. UPSERT THE SOURCE DOCUMENT
+        graph.execute(
+            """
+            MERGE (s:Source {doc_id: $doc_id})
+            ON CREATE SET s.doc_type = $doc_type, s.filename = $filename
+            """,
+            {"doc_id": doc_id, "doc_type": doc_type, "filename": filename}
+        )
+
+        # 2. UPSERT THE CLAUSE NODE (Criticism 4 Resolution)
+        graph.execute(
+            """
+            MERGE (c:Clause {clause_id: $clause_id})
+            ON CREATE SET c.text = $text
+            """,
+            {"clause_id": clause_id, "text": clause_text}
+        )
+
+        # 3. LINK CLAUSE TO SOURCE (Document -> contains -> Clause)
+        graph.execute(
+            """
+            MATCH (s:Source {doc_id: $doc_id})
+            MATCH (c:Clause {clause_id: $clause_id})
+            MERGE (s)-[:CONTAINS_CLAUSE]->(c)
+            """,
+            {"doc_id": doc_id, "clause_id": clause_id}
+        )
+
+        # 4. UPSERT ENTITIES & LINK TO SPECIFIC CLAUSE
+        for ent in entities:
+            ent_name = ent.get("name", "").strip()
+            ent_label = ent.get("label", "Company").strip()
+            
+            if not ent_name:
+                continue
+
+            # Merge Entity
+            graph.execute(
+                """
+                MERGE (e:Entity {name: $name})
+                ON CREATE SET e.label = $label, e.normalized_name = $name
+                """,
+                {"name": ent_name, "label": ent_label}
+            )
+
+            # Link Entity directly to the Clause it was found in (EXTRACTED_FROM)
+            graph.execute(
+                """
+                MATCH (e:Entity {name: $name})
+                MATCH (c:Clause {clause_id: $clause_id})
+                MERGE (e)-[:EXTRACTED_FROM]->(c)
+                """,
+                {"name": ent_name, "clause_id": clause_id}
+            )
+
+        # 5. UPSERT RELATIONSHIPS BETWEEN ENTITIES
+        for rel in relationships:
+            from_ent = rel.get("from", "").strip()
+            to_ent = rel.get("to", "").strip()
+            rel_type = rel.get("type", "RELATED_TO").strip()
+
+            if not from_ent or not to_ent:
+                continue
+
+            graph.execute(
+                """
+                MATCH (a:Entity {name: $from_name})
+                MATCH (b:Entity {name: $to_name})
+                MERGE (a)-[r:RELATES_TO {type: $rel_type}]->(b)
+                """,
+                {"from_name": from_ent, "to_name": to_ent, "rel_type": rel_type}
+            )
+
+        print(f"Graph Insertion Complete for Clause {clause_id}.")
+
+    except Exception as e:
+        print(f"Error inserting data into graph: {e}")

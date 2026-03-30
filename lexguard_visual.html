@@ -1,0 +1,163 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 800px;
+                 background-color: #1E1E1E;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#E03A3E", "font": {"color": "white"}, "id": "LEASE_002", "label": "Document:\nLEASE_002", "shape": "box", "title": "Source Document"}, {"color": "#F58220", "font": {"color": "white"}, "id": "LEASE_002_CLAUSE_1", "label": "Clause:\n1", "shape": "dot", "title": "LEASE_002_CLAUSE_1"}, {"color": "#F58220", "font": {"color": "white"}, "id": "LEASE_002_CLAUSE_2", "label": "Clause:\n2", "shape": "dot", "title": "LEASE_002_CLAUSE_2"}, {"color": "#F58220", "font": {"color": "white"}, "id": "LEASE_002_CLAUSE_3", "label": "Clause:\n3", "shape": "dot", "title": "LEASE_002_CLAUSE_3"}, {"color": "#F58220", "font": {"color": "white"}, "id": "LEASE_002_CLAUSE_4", "label": "Clause:\n4", "shape": "dot", "title": "LEASE_002_CLAUSE_4"}, {"color": "#2DC653", "font": {"color": "white"}, "id": "Sample", "label": "Sample", "shape": "ellipse", "title": "Location"}, {"color": "#9D4EDD", "font": {"color": "white"}, "id": "Shri", "label": "Shri", "shape": "ellipse", "title": "Person"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "State Bank Of India", "label": "State Bank Of India", "shape": "ellipse", "title": "Company"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Bank", "label": "Bank", "shape": "ellipse", "title": "Company"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "State Bank Of India Act", "label": "State Bank Of India Act", "shape": "ellipse", "title": "Company"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Corporate Office", "label": "Corporate Office", "shape": "ellipse", "title": "Company"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "State Bank Bhavan", "label": "State Bank Bhavan", "shape": "ellipse", "title": "Company"}, {"color": "#2DC653", "font": {"color": "white"}, "id": "Mumbai", "label": "Mumbai", "shape": "ellipse", "title": "Location"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Local Head Office", "label": "Local Head Office", "shape": "ellipse", "title": "Company"}, {"color": "#9D4EDD", "font": {"color": "white"}, "id": "Lessee", "label": "Lessee", "shape": "ellipse", "title": "Person"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Tds", "label": "Tds", "shape": "ellipse", "title": "Company"}, {"color": "#9D4EDD", "font": {"color": "white"}, "id": "Lessor", "label": "Lessor", "shape": "ellipse", "title": "Person"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Banker\u2019S", "label": "Banker\u2019S", "shape": "ellipse", "title": "Company"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Lessor (S", "label": "Lessor (S", "shape": "ellipse", "title": "Company"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Branch/Office", "label": "Branch/Office", "shape": "ellipse", "title": "Company"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Guest House", "label": "Guest House", "shape": "ellipse", "title": "Company"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Lessor/S", "label": "Lessor/S", "shape": "ellipse", "title": "Company"}, {"color": "#9D4EDD", "font": {"color": "white"}, "id": "Lease", "label": "Lease", "shape": "ellipse", "title": "Person"}, {"color": "#00B4D8", "font": {"color": "white"}, "id": "Name_____________________Address", "label": "Name_____________________Address", "shape": "ellipse", "title": "Company"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "color": "#888888", "from": "LEASE_002", "title": "CONTAINS_CLAUSE", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#888888", "from": "LEASE_002", "title": "CONTAINS_CLAUSE", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#888888", "from": "LEASE_002", "title": "CONTAINS_CLAUSE", "to": "LEASE_002_CLAUSE_3"}, {"arrows": "to", "color": "#888888", "from": "LEASE_002", "title": "CONTAINS_CLAUSE", "to": "LEASE_002_CLAUSE_4"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Sample", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Shri", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "State Bank Of India", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Bank", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "State Bank Of India Act", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Corporate Office", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "State Bank Bhavan", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Mumbai", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Local Head Office", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessee", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Tds", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_1"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessee", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessor", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Banker\u2019S", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Tds", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessor (S", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Branch/Office", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Guest House", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessor/S", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_2"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessee", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_3"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessor (S", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_3"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Bank", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_3"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Bank", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_4"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessee", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_4"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lease", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_4"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Lessor", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_4"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "State Bank Of India", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_4"}, {"arrows": "to", "color": "#555555", "dashes": true, "from": "Name_____________________Address", "title": "EXTRACTED_FROM", "to": "LEASE_002_CLAUSE_4"}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {
+    "configure": {
+        "enabled": false
+    },
+    "edges": {
+        "color": {
+            "inherit": true
+        },
+        "smooth": {
+            "enabled": true,
+            "type": "dynamic"
+        }
+    },
+    "interaction": {
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
+        "hideNodesOnDrag": false
+    },
+    "physics": {
+        "barnesHut": {
+            "avoidOverlap": 0,
+            "centralGravity": 0.3,
+            "damping": 0.09,
+            "gravitationalConstant": -8000,
+            "springConstant": 0.001,
+            "springLength": 150
+        },
+        "enabled": true,
+        "stabilization": {
+            "enabled": true,
+            "fit": true,
+            "iterations": 1000,
+            "onlyDynamicEdges": false,
+            "updateInterval": 50
+        }
+    }
+};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
