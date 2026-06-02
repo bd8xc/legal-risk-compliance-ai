@@ -9,12 +9,14 @@ from typing import Any, Dict, List, Optional
 
 from .grammar import (
     ALPHA_RE,
-    ANNEX_RE,
-    ARTICLE_RE,
     DEFINITION_RE,
     MAIN_RE,
     ROMAN_RE,
+    SECTION_LABEL_ONLY_RE,
+    SECTION_WITH_ID_RE,
     SUBNUM_RE,
+    looks_like_preamble_boundary,
+    looks_like_section_heading,
 )
 from .postprocess import (
     merge_short_heading_into_first_child,
@@ -28,7 +30,7 @@ from .table_extraction import extract_tables
 
 def split_clauses(text: str) -> List[Dict[str, Any]]:
     """
-    Parses the document into a tree of clauses (Article > Clause > Subclause).
+    Parses the document into a tree of clauses (Section > Clause > Subclause).
 
     THE STACK:
     We maintain a 'stack' state to track depth.
@@ -49,8 +51,8 @@ def split_clauses(text: str) -> List[Dict[str, Any]]:
     # State Machine Variables
     section_name = "Document"
 
-    # Used only as a fallback for unlabeled annexures/schedules.
-    article_counter = 0
+    # Used only to generate stable section tokens when headings are present.
+    section_counter = 0
     loose_counter = 0  # for unanchored text blocks
 
     # Hierarchy Stack stores the rendered token at each depth
@@ -125,16 +127,7 @@ def split_clauses(text: str) -> List[Dict[str, Any]]:
         # PREAMBLE / RECITALS: split on common legal markers to avoid one giant,
         # low-coherence P* chunk before the first numbered clause.
         if stack["article"] is None and stack["main"] is None and buffer:
-            upper = line.upper()
-            if upper.startswith(
-                (
-                    "BETWEEN",
-                    "WHEREAS",
-                    "NOW THIS AGREEMENT",
-                    "NOW THIS",
-                    "IN WITNESS WHEREOF",
-                )
-            ):
+            if looks_like_preamble_boundary(line):
                 flush()
                 current_level = "clause"
 
@@ -148,15 +141,15 @@ def split_clauses(text: str) -> List[Dict[str, Any]]:
             buffer.append(line)
             continue
 
-        # LEVEL 1: ARTICLES ("ARTICLE 1")
-        m = ARTICLE_RE.match(line)
-        if m:
+        # LEVEL 1: SECTION HEADINGS (generic, non-hardcoded)
+        # Examples: "ARTICLE 1 DEFINITIONS", "Exhibit B: Fee Schedule".
+        if looks_like_section_heading(line) and SECTION_WITH_ID_RE.match(line):
             flush()  # Save previous work
             current_level = "clause"
-            article_counter += 1
+            section_counter += 1
             section_name = line
             stack = {
-                "article": f"ART{m.group(1).strip()}",
+                "article": f"S{section_counter}",
                 "main": None,
                 "subnum": None,
                 "subsubnum": None,
@@ -165,15 +158,17 @@ def split_clauses(text: str) -> List[Dict[str, Any]]:
             }
             continue
 
-        # LEVEL 1 (Alternate): ANNEXURES ("Annexure A")
-        m = ANNEX_RE.match(line)
-        if m:
+        # Label-only headings (e.g., "SCHEDULE")
+        # Only treat as a new section after we've entered the structured portion
+        # of the document (i.e., after some numbering/sectioning has started).
+        m = SECTION_LABEL_ONLY_RE.match(line)
+        if m and (stack["main"] is not None or stack["article"] is not None) and looks_like_section_heading(line):
             flush()
             current_level = "clause"
-            article_counter += 1
+            section_counter += 1
             section_name = line
             stack = {
-                "article": f"ANNEX{(m.group(2) or str(article_counter)).strip()}",
+                "article": f"S{section_counter}",
                 "main": None,
                 "subnum": None,
                 "subsubnum": None,

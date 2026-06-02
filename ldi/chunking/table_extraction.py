@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from .grammar import ANNEX_RE, ARTICLE_RE, MAIN_RE, TABLE_SPLIT_RE
+from .grammar import (
+    MAIN_RE,
+    SECTION_LABEL_ONLY_RE,
+    SECTION_WITH_ID_RE,
+    TABLE_SPLIT_RE,
+    looks_like_section_heading,
+)
 
 
 def looks_like_table_row(line: str) -> bool:
@@ -28,7 +34,7 @@ def extract_tables(lines: List[str]):
 
     Naming:
     - Uses the last seen non-table line as the best-effort table title.
-    - Falls back to the last structural heading (Article/Annex/Main clause) if no title exists.
+    - Falls back to the last structural heading (Section/Main clause) if no title exists.
     """
     tables = []
     cleaned = []
@@ -40,7 +46,7 @@ def extract_tables(lines: List[str]):
     while i < len(lines):
         line = lines[i].strip()
 
-        if MAIN_RE.match(line) or ARTICLE_RE.match(line) or ANNEX_RE.match(line):
+        if MAIN_RE.match(line) or looks_like_section_heading(line):
             last_section = line
             last_title = None
 

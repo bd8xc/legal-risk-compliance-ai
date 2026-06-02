@@ -213,7 +213,7 @@ async def embed_documents(files: List[UploadFile] = File(...)):
             results.append({
                 "filename": file.filename,
                 "clauses_indexed": stats["clauses"],
-                "status": "success"
+                "status": "cached" if stats.get("cached") else "success"
             })
         finally:
             os.remove(temp_path)

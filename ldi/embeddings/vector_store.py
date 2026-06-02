@@ -2,6 +2,8 @@
 ClauseVectorStore: Handles persistent storage and retrieval of clause embeddings using ChromaDB.
 """
 from typing import List, Dict, Any
+import json
+import os
 import numpy as np
 import chromadb
 from chromadb.config import Settings
@@ -13,6 +15,38 @@ class ClauseVectorStore:
     def __init__(self, persist_directory: str = "./chroma", collection_name: str = "clauses"):
         self._client = chromadb.PersistentClient(path=persist_directory, settings=Settings(allow_reset=True))
         self._collection = self._client.get_or_create_collection(collection_name)
+        self._document_cache_path = os.path.join(persist_directory, "document_hash_cache.json")
+        self._document_cache = self._load_document_cache()
+
+    def _load_document_cache(self) -> Dict[str, Any]:
+        if not os.path.exists(self._document_cache_path):
+            return {"known_hashes": [], "file_name_to_hash": {}}
+        try:
+            with open(self._document_cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            return {"known_hashes": [], "file_name_to_hash": {}}
+        if not isinstance(data, dict):
+            return {"known_hashes": [], "file_name_to_hash": {}}
+        return {
+            "known_hashes": list(data.get("known_hashes", [])),
+            "file_name_to_hash": dict(data.get("file_name_to_hash", {})),
+        }
+
+    def _save_document_cache(self) -> None:
+        temp_path = f"{self._document_cache_path}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(self._document_cache, f, indent=2)
+        os.replace(temp_path, self._document_cache_path)
+
+    def is_document_indexed(self, document_hash: str) -> bool:
+        return document_hash in self._document_cache.get("known_hashes", [])
+
+    def register_document(self, document_hash: str, file_name: str) -> None:
+        if document_hash not in self._document_cache["known_hashes"]:
+            self._document_cache["known_hashes"].append(document_hash)
+        self._document_cache["file_name_to_hash"][file_name] = document_hash
+        self._save_document_cache()
 
     def add(self, ids: List[str], texts: List[str], embeddings: np.ndarray, metadatas: List[Dict[str, Any]]):
         """
