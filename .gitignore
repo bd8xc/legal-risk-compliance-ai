@@ -5,6 +5,8 @@ ldi/tests/chunk_quality_report.csv
 # Ignore chunk quality report CSV
 ldi/chunk_quality_report.csv
 
+ldi/contract_risk/data/risk_state.json
+
 # ChromaDB persistent storage
 chroma/
 

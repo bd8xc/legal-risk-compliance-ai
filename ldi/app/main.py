@@ -1,9 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, Body
-from fastapi import APIRouter
+from fastapi import FastAPI, UploadFile, File, Body, HTTPException
 from typing import List
 import shutil
 import os
 from ldi.search.pipeline import search_clauses
+from ldi.contract_risk.router import router as contract_risk_router
 from pydantic import BaseModel
 
 # PDF loader: extracts both text and tables from PDF
@@ -15,9 +15,6 @@ from ldi.chunking.clause_splitter import split_clauses
 
 # Embedding pipeline
 from ldi.embeddings.pipeline import embed_and_store
-# Search pipeline
-from ldi.search.pipeline import search_clauses
-from pydantic import BaseModel
 
 class SearchRequest(BaseModel):
     query: str
@@ -26,12 +23,12 @@ class SearchRequest(BaseModel):
 # Initialize FastAPI app
 
 app = FastAPI()
+app.include_router(contract_risk_router)
 
 
 # ==============================
 # EMBED ENDPOINT: Embeds and stores legal clauses from uploaded PDF or DOCX
 # ==============================
-from fastapi import HTTPException
 
 
 # @app.post("/embed/")
