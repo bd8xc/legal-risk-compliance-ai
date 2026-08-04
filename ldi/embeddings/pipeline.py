@@ -25,13 +25,12 @@ def _compute_document_hash(clauses: List[Dict[str, Any]]) -> str:
     return hasher.hexdigest()
 
 
-def embed_and_store(clauses: List[Dict[str, Any]], file_name: str, document_id: str | None = None) -> Dict[str, Any]:
+def embed_and_store(clauses: List[Dict[str, Any]], file_name: str) -> Dict[str, Any]:
     """
     Embeds clauses and stores them in the vector store with metadata.
     Args:
         clauses (List[Dict]): List of clause dicts.
         file_name (str): Name of the source file.
-        document_id (str | None): Optional stable document identifier for unique vector IDs.
     Returns:
         Dict: Stats about the embedding process.
     """
@@ -40,10 +39,9 @@ def embed_and_store(clauses: List[Dict[str, Any]], file_name: str, document_id: 
 
     document_hash = _compute_document_hash(clauses)
     vector_store = ClauseVectorStore()
-    storage_key = document_id or file_name
     if vector_store.is_document_indexed(document_hash):
-        vector_store.register_document(document_hash, storage_key)
-        return {"clauses": 0, "embedding_dim": 0, "cached": True, "document_hash": document_hash, "document_id": storage_key}
+        vector_store.register_document(document_hash, file_name)
+        return {"clauses": 0, "embedding_dim": 0, "cached": True, "document_hash": document_hash}
 
     texts: List[str] = []
     ids: List[str] = []
@@ -56,7 +54,7 @@ def embed_and_store(clauses: List[Dict[str, Any]], file_name: str, document_id: 
             continue
 
         clause_id = str(clause.get("clause_id") or f"IDX{idx}")
-        base_vector_id = f"{document_id or file_name}::{clause_id}"
+        base_vector_id = f"{file_name}::{clause_id}"
         vector_id = base_vector_id
         # Ensure uniqueness by appending a suffix if needed
         if vector_id in seen_ids:
@@ -73,11 +71,10 @@ def embed_and_store(clauses: List[Dict[str, Any]], file_name: str, document_id: 
             "section": clause.get("section"),
             "level": clause.get("level"),
             "file_name": file_name,
-            "document_id": document_id or file_name,
             "text": text,
             "document_hash": document_hash,
         }
-        for extra_key in ("type", "term", "table_context", "source_type", "template_id", "candidate_id"):
+        for extra_key in ("type", "term", "table_context"):
             if extra_key in clause:
                 metadata[extra_key] = clause.get(extra_key)
         metadatas.append(metadata)

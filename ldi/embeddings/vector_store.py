@@ -12,13 +12,7 @@ class ClauseVectorStore:
     """
     Stores and retrieves clause embeddings and metadata in a persistent ChromaDB collection.
     """
-    def __init__(self, persist_directory: str | None = None, collection_name: str = "clauses"):
-        # Default to a workspace-local data folder under the contract_risk package
-        if persist_directory is None:
-            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_risk", "data")
-            persist_directory = os.path.join(base_dir, "chroma")
-        # ensure directory exists for chroma persistence and cache
-        os.makedirs(persist_directory, exist_ok=True)
+    def __init__(self, persist_directory: str = "./chroma", collection_name: str = "clauses"):
         self._client = chromadb.PersistentClient(path=persist_directory, settings=Settings(allow_reset=True))
         self._collection = self._client.get_or_create_collection(collection_name)
         self._document_cache_path = os.path.join(persist_directory, "document_hash_cache.json")
@@ -73,25 +67,17 @@ class ClauseVectorStore:
             metadatas=metadatas
         )
 
-    def get_clauses(self, where: Dict[str, Any] = None, limit: int = 1000, offset: int = 0, include=None) -> Dict[str, Any]:
-        """Retrieve clauses from the vector store matching a metadata filter."""
-        if include is None:
-            include = ["ids", "metadatas", "documents"]
-        return self._collection.get(where=where or {}, limit=limit, offset=offset, include=include)
-
-    def search(self, query_embedding: np.ndarray, k: int = 5, where: Dict[str, Any] = None):
+    def search(self, query_embedding: np.ndarray, k: int = 5):
         """
         Search for the top-k most similar clauses to the query embedding.
         Args:
             query_embedding (np.ndarray): Query embedding vector.
             k (int): Number of results to return.
-            where (Dict[str, Any]): Optional metadata filter.
         Returns:
             List[Dict]: List of matching clause metadata and scores.
         """
         results = self._collection.query(
             query_embeddings=[query_embedding.tolist()],
-            n_results=k,
-            where=where,
+            n_results=k
         )
         return results
