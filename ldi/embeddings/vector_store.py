@@ -48,6 +48,65 @@ class ClauseVectorStore:
         self._document_cache["file_name_to_hash"][file_name] = document_hash
         self._save_document_cache()
 
+    def get_document_clauses(self, file_name: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve all stored clause chunks for a document identified by file name.
+
+        The preferred lookup path is the cached document hash, with a fallback to
+        direct file_name metadata matching for older or partially cached indexes.
+        """
+        if not file_name:
+            return []
+
+        clauses: List[Dict[str, Any]] = []
+        seen_ids = set()
+        file_hash = self._document_cache.get("file_name_to_hash", {}).get(file_name)
+        lookups = []
+        if file_hash:
+            lookups.append({"where": {"document_hash": file_hash}})
+        lookups.append({"where": {"file_name": file_name}})
+
+        for lookup in lookups:
+            try:
+                result = self._collection.get(
+                    include=["documents", "metadatas"],
+                    **lookup,
+                )
+            except Exception:
+                continue
+
+            ids = result.get("ids") or []
+            documents = result.get("documents") or []
+            metadatas = result.get("metadatas") or []
+
+            for index, vector_id in enumerate(ids):
+                if vector_id in seen_ids:
+                    continue
+                seen_ids.add(vector_id)
+
+                metadata = metadatas[index] if index < len(metadatas) and isinstance(metadatas[index], dict) else {}
+                document_text = documents[index] if index < len(documents) else ""
+                clauses.append(
+                    {
+                        "clause_id": metadata.get("clause_id") or str(vector_id).split("::")[-1],
+                        "section": metadata.get("section") or "",
+                        "level": metadata.get("level") or "clause",
+                        "text": document_text or metadata.get("text") or "",
+                        "file_name": metadata.get("file_name") or file_name,
+                        "document_hash": metadata.get("document_hash") or file_hash or "",
+                    }
+                )
+
+        return clauses
+
+    def list_documents(self) -> List[Dict[str, Any]]:
+        """Return embedded document filenames and hashes for discovery in the API."""
+
+        documents: List[Dict[str, Any]] = []
+        for file_name, document_hash in sorted(self._document_cache.get("file_name_to_hash", {}).items()):
+            documents.append({"doc_id": file_name, "document_hash": document_hash})
+        return documents
+
     def add(self, ids: List[str], texts: List[str], embeddings: np.ndarray, metadatas: List[Dict[str, Any]]):
         """
         Add embeddings and metadata to the vector store.

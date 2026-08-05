@@ -1,10 +1,10 @@
 from fastapi import FastAPI, UploadFile, File, Body
-from fastapi import APIRouter
 from typing import List
 import shutil
 import os
 from ldi.search.pipeline import search_clauses
 from pydantic import BaseModel
+from agents.confidentiality_leakage.router import router as confidentiality_router
 
 # PDF loader: extracts both text and tables from PDF
 from ldi.ingestion.pdf_table_loader import extract_pdf_text_and_tables
@@ -26,6 +26,7 @@ class SearchRequest(BaseModel):
 # Initialize FastAPI app
 
 app = FastAPI()
+app.include_router(confidentiality_router)
 
 
 # ==============================

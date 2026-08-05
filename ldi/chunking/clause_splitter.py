@@ -28,6 +28,38 @@ from .semantic_repair import semantic_cleanup
 from .table_extraction import extract_tables
 
 
+def split_large_chunks(
+    chunks: List[Dict[str, Any]],
+    max_words: int = 300,
+) -> List[Dict[str, Any]]:
+
+    output = []
+
+    for chunk in chunks:
+        text = str(chunk.get("text", "")).strip()
+        words = text.split()
+
+        # Chunk is already small enough
+        if len(words) <= max_words:
+            output.append(chunk)
+            continue
+
+        # Split oversized chunk
+        for i in range(0, len(words), max_words):
+            part_words = words[i:i + max_words]
+
+            new_chunk = dict(chunk)
+            new_chunk["text"] = " ".join(part_words)
+
+            # Preserve original ID but distinguish parts
+            new_chunk["clause_id"] = (
+                f"{chunk.get('clause_id', 'chunk')}_part{i // max_words + 1}"
+            )
+
+            output.append(new_chunk)
+
+    return output
+
 def split_clauses(text: str) -> List[Dict[str, Any]]:
     """
     Parses the document into a tree of clauses (Section > Clause > Subclause).
@@ -252,4 +284,6 @@ def split_clauses(text: str) -> List[Dict[str, Any]]:
     results = merge_short_heading_into_first_child(results)
     results = pack_small_siblings(results)
     results = merge_small_children(results)
+    results = split_large_chunks(results, max_words=300)
+    
     return results + tables
