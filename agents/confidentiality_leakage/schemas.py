@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -34,6 +34,7 @@ class SensitiveFinding(BaseModel):
     value: str
     source: str
     sensitivity: str
+    category: str = "personal_data"
     clause_id: str = ""
     section: str = ""
     start: int
@@ -52,6 +53,13 @@ class ConfidentialityReport(BaseModel):
     medium_sensitivity_count: int
     context_dependent_count: int
     findings: List[SensitiveFinding]
+    summary: dict[str, int] = Field(default_factory=lambda: {
+        "personal_data": 0,
+        "sensitive_personal_data": 0,
+        "business_confidential": 0,
+        "processing_activities": 0,
+    })
+    processing_activity: List[dict[str, Any]] = Field(default_factory=list)
 
 
 class ClauseFinding(BaseModel):

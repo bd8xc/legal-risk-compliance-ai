@@ -54,3 +54,7 @@ python -m spacy download en_core_web_lg
 ---
 Initial commit: LDI scaffold and requirements.
 # legal-risk-compliance-ai
+
+
+To run it -
+ uvicorn ldi.app.main:app --reload        

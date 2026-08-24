@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Tuple
 
+CRITICAL_TYPES = {
+    "API_KEY", "PRIVATE_KEY", "JWT_TOKEN", "ACCESS_TOKEN", "OAUTH_TOKEN", "SECRET_KEY",
+    "DATABASE_PASSWORD", "CONNECTION_STRING", "AWS_ACCESS_KEY", "AZURE_KEY", "GOOGLE_API_KEY",
+    "BANK_ACCOUNT", "CREDIT_CARD", "MEDICAL_HISTORY", "DIAGNOSIS", "PRESCRIPTION", "BIOMETRIC_DATA",
+    "CONFIDENTIAL_TRADE_SECRET", "CONFIDENTIAL_FINANCIAL", "CONFIDENTIAL_CREDENTIAL",
+}
 HIGH_TYPES = {
     "AADHAAR_NUMBER",
     "PAN_NUMBER",
@@ -11,13 +17,12 @@ HIGH_TYPES = {
     "IBAN",
     "CREDIT_CARD",
     "CONFIDENTIAL_TRADE_SECRET",
-    "CONFIDENTIAL_FINANCIAL",
+    "CONFIDENTIAL_FINANCIAL", "PASSPORT", "PASSPORT_NUMBER", "DRIVING_LICENSE", "DRIVING_LICENSE_NUMBER", "GST", "TAX_ID", "SALARY",
 }
 MEDIUM_TYPES = {
     "EMAIL",
     "PHONE_NUMBER",
     "IP_ADDRESS",
-    "PERSON",
     "ADDRESS",
     "POSTAL_CODE",
     "CONFIDENTIAL_CUSTOMER",
@@ -28,18 +33,22 @@ CONTEXT_TYPES = {"ORG", "GPE", "LOC", "MONEY"}
 
 
 def sensitivity_for_detection(detection_type: str) -> str:
+    if detection_type in CRITICAL_TYPES:
+        return "CRITICAL"
     if detection_type in HIGH_TYPES:
         return "HIGH"
     if detection_type in MEDIUM_TYPES:
         return "MEDIUM"
-    return "CONTEXT_DEPENDENT"
+    if detection_type in {"ORG", "GPE", "LOC", "MONEY", "DATE"}:
+        return "CONTEXT_DEPENDENT"
+    return "LOW"
 
 
 def _priority(finding: Dict[str, Any]) -> Tuple[int, int]:
-    source_rank = 0 if finding.get("source") == "regex" else 1
-    sensitivity_rank = {"HIGH": 0, "MEDIUM": 1, "CONTEXT_DEPENDENT": 2}.get(
+    source_rank = 0 if finding.get("source") != "ner" else 1
+    sensitivity_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "CONTEXT_DEPENDENT": 4}.get(
         finding.get("sensitivity", "CONTEXT_DEPENDENT"),
-        3,
+        5,
     )
     return source_rank, sensitivity_rank
 

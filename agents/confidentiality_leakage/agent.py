@@ -1,68 +1,69 @@
-"""Main confidentiality leakage analysis agent."""
+"""Document-level confidentiality and privacy analysis over LDI clauses."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from collections import Counter
+from typing import Any
+
+from ldi.embeddings.vector_store import ClauseVectorStore
 
 from .classifier import classify_findings
-from .content_detector import detect_confidential_content
-from .masker import mask_value
-from .ner_detector import detect_ner_sensitive_info
-from .regex_detector import detect_regex_sensitive_info
+from .detectors import ConfidentialBusinessDetector, NERDetector, PIIDetector, ProcessingActivityDetector, RegexDetector, SensitivePersonalDetector
+from .schemas import ConfidentialityReport, DocumentIndexItem, SensitiveFinding
 from .scorer import score_confidentiality
-from .schemas import ConfidentialityReport, SensitiveFinding, DocumentIndexItem
-from ldi.embeddings.vector_store import ClauseVectorStore
 
 
 class ConfidentialityLeakageAgent:
-    """Analyze clause-level text for potentially sensitive information."""
+    """Aggregate independent DLP detectors over clauses already produced by LDI."""
 
-    def __init__(self) -> None:
-        self._vector_store = ClauseVectorStore()
+    def __init__(self, vector_store: ClauseVectorStore | None = None) -> None:
+        self._vector_store = vector_store or ClauseVectorStore()
+        self._detectors = (RegexDetector(), PIIDetector(), SensitivePersonalDetector(), ConfidentialBusinessDetector(), NERDetector())
+        self._processing_detector = ProcessingActivityDetector()
 
-    def _load_clauses_for_document(self, file_name: str) -> List[Dict[str, Any]]:
+    def _load_clauses_for_document(self, file_name: str) -> list[dict[str, Any]]:
         clauses = self._vector_store.get_document_clauses(file_name)
         if not clauses:
-            raise LookupError(
-                f"No embedded clauses found for '{file_name}'. Index the document first, then retry with the same file name."
-            )
+            raise LookupError(f"No embedded clauses found for '{file_name}'. Index the document first, then retry with the same file name.")
         return clauses
 
-    def list_documents(self) -> List[DocumentIndexItem]:
-        documents = []
-        for item in self._vector_store.list_documents():
-            documents.append(DocumentIndexItem(**item))
-        return documents
+    def list_documents(self) -> list[DocumentIndexItem]:
+        return [DocumentIndexItem(**item) for item in self._vector_store.list_documents()]
 
-    def analyze(self, doc_id: str, clauses: List[Dict[str, Any]] | None = None):
-        findings: List[Dict[str, Any]] = []
-        clause_rows = clauses if clauses else self._load_clauses_for_document(doc_id)
-
+    def analyze(self, doc_id: str, clauses: list[dict[str, Any]] | None = None) -> ConfidentialityReport:
+        all_findings: list[dict[str, Any]] = []
+        activities: list[dict[str, Any]] = []
+        clause_rows = clauses if clauses is not None else self._load_clauses_for_document(doc_id)
         for clause in clause_rows:
             text = str(clause.get("text", "") or "")
-            clause_id = str(clause.get("clause_id") or "")
-            section = str(clause.get("section") or "")
+            metadata = {"clause_id": str(clause.get("clause_id") or ""), "section": str(clause.get("section") or "")}
+            detected = [finding for detector in self._detectors for finding in detector.detect(text, metadata)]
+            all_findings.extend(classify_findings(detected, **metadata))
+            activities.extend({**activity, **metadata} for activity in self._processing_detector.detect(text, metadata))
 
-            regex_findings = detect_regex_sensitive_info(text)
-            ner_findings = detect_ner_sensitive_info(text)
-            content_findings = detect_confidential_content(text)
-            merged = classify_findings(regex_findings + ner_findings + content_findings, clause_id=clause_id, section=section)
-            findings.extend(merged)
+        score = score_confidentiality(all_findings, processing_activity_count=len(activities))
+        public_findings = []
+        for finding in all_findings:
+            public = dict(finding)
+            public_findings.append(SensitiveFinding(**public))
 
-        score = score_confidentiality(findings)
-        sensitive_data_detected = bool(findings)
-
-    
-
-        report = ConfidentialityReport(
+        sensitivity_counts = Counter(finding["sensitivity"] for finding in all_findings)
+        category_counts = Counter(finding.get("category", "personal_data") for finding in all_findings)
+        return ConfidentialityReport(
             doc_id=doc_id,
-            sensitive_data_detected=sensitive_data_detected,
+            sensitive_data_detected=bool(all_findings),
             risk_score=int(score["risk_score"]),
             risk_level=str(score["risk_level"]),
-            total_findings=len(findings),
-            high_sensitivity_count=sum(1 for finding in findings if finding["sensitivity"] == "HIGH"),
-            medium_sensitivity_count=sum(1 for finding in findings if finding["sensitivity"] == "MEDIUM"),
-            context_dependent_count=sum(1 for finding in findings if finding["sensitivity"] == "CONTEXT_DEPENDENT"),
-            findings=[SensitiveFinding(**finding) for finding in findings],
+            total_findings=len(public_findings),
+            high_sensitivity_count=sensitivity_counts.get("HIGH", 0),
+            medium_sensitivity_count=sensitivity_counts.get("MEDIUM", 0),
+            context_dependent_count=sensitivity_counts.get("CONTEXT_DEPENDENT", 0),
+            findings=public_findings,
+            summary={
+                "personal_data": category_counts.get("personal_data", 0),
+                "sensitive_personal_data": category_counts.get("sensitive_personal_data", 0),
+                "business_confidential": category_counts.get("business_confidential", 0),
+                "processing_activities": len(activities),
+            },
+            processing_activity=activities,
         )
-        return report

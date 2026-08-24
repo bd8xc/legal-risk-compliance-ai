@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from agents.confidentiality_leakage.agent import ConfidentialityLeakageAgent
 from agents.confidentiality_leakage.classifier import classify_findings
-from agents.confidentiality_leakage.content_detector import detect_confidential_content
-from agents.confidentiality_leakage.ner_detector import detect_ner_sensitive_info
-from agents.confidentiality_leakage.regex_detector import detect_regex_sensitive_info
+from agents.confidentiality_leakage.detectors.confidential_business_detector import detect_confidential_content
+from agents.confidentiality_leakage.detectors.ner_detector import detect_ner_sensitive_info
+from agents.confidentiality_leakage.detectors.regex_detector import detect_regex_sensitive_info
 from agents.confidentiality_leakage.scorer import score_confidentiality
 
 
