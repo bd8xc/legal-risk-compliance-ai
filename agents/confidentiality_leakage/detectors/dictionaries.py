@@ -25,12 +25,63 @@ BUSINESS_CONFIDENTIAL = {
 }
 
 PROCESSING_ACTIVITIES = (
-    "collect", "store", "retain", "delete", "erase", "share", "transfer", "transmit", "process",
-    "third party", "vendor", "processor", "cloud", "backup", "archive", "cross-border transfer",
-    "consent", "purpose limitation",
+    "collect", "collects", "collected", "collecting",
+    "store", "stores", "stored", "storing",
+    "retain", "retains", "retained", "retaining",
+    "delete", "deletes", "deleted", "deleting",
+    "erase", "erases", "erased", "erasing",
+    "share", "shares", "shared", "sharing",
+    "transfer", "transfers", "transferred", "transferring",
+    "transmit", "transmits", "transmitted", "transmitting",
+    "process", "processes", "processed", "processing",
 )
 
 LEGAL_BOILERPLATE = {
-    "company", "employee", "applicable law", "cause", "agreement", "schedule", "section", "party",
-    "receiving party", "disclosing party", "confidential information", "affiliate", "affiliates",
+    "company", "employee", "vendor", "supplier", "customer", "client", "recipient", "purpose",
+    "applicable law", "cause", "agreement", "schedule", "section", "party", "third party",
+    "receiving party", "disclosing party", "neither party", "either party", "force majeure",
+    "confidential information", "affiliate", "affiliates", "private limited", "pvt ltd", "limited",
 }
+
+ENTITY_PLACEHOLDERS = {"xyz", "abc", "tbd", "n/a", "na"}
+
+ENTITY_ROLE_TERMS = {
+    "vendor", "supplier", "customer", "client", "company", "employee", "recipient", "party",
+    "purpose", "force majeure", "neither party", "either party", "receiving party", "disclosing party",
+}
+
+ENTITY_NON_PERSON_TERMS = {
+    "street", "road", "rd", "avenue", "ave", "lane", "ln", "marg", "boulevard", "blvd",
+    "highway", "hwy", "drive", "dr", "place", "pl", "floor", "building", "office",
+}
+
+MEDICAL_CONTEXT_TERMS = (
+    "medical", "health", "clinical", "patient", "doctor", "hospital", "diagnosis", "diagnosed",
+    "prescription", "medication", "drug", "illness", "disease", "treatment plan",
+)
+
+CONFIDENTIALITY_CONTEXT_TERMS = (
+    "confidential", "proprietary", "non-public", "nonpublic", "internal", "restricted", "secret",
+    "sensitive", "protected", "commercially sensitive",
+)
+
+PROCESSING_DATA_TERMS = (
+    "personal data", "personal information", "sensitive data", "employee data", "customer data",
+    "user data", "data", "information", "records", "details", "identifiers", "account", "bank",
+)
+
+
+LABELS = {
+    "DOB": r"\b(?:date of birth|dob|birth date)\s*[:=-]?\s*[^,;.\n]+",
+    "AGE": r"\b(?:age)\s*[:=-]?\s*\d{1,3}\b",
+    "GENDER": r"\b(?:gender|sex)\s*[:=-]?\s*(?:male|female|non-binary|other)\b",
+    "NATIONALITY": r"\b(?:nationality|citizenship)\s*[:=-]?\s*[A-Za-z -]+",
+    "ADDRESS": r"\b(?:residential|home|registered|mailing) address\s*[:=-]?\s*(?=[^;.\n]{0,160}\d)\d{1,6}\s+[^;.\n]{1,160}|\bregistered office\s+(?:at|located at)\s+(?=\d)\d{1,6}\s+[^;.\n]{1,160}",
+    "SALARY": r"\b(?:salary|compensation|remuneration|pay)\s*[:=-]?\s*(?:[$€£₹]\s*)?[\d,]+(?:\.\d+)?",
+    "EMERGENCY_CONTACT": r"\b(?:emergency contact|next of kin)\s*[:=-]?\s*[^;\n]+",
+    "MARITAL_STATUS": r"\bmarital status\s*[:=-]?\s*[A-Za-z-]+",
+    "DEPENDENT_INFORMATION": r"\bdependents?\s*[:=-]?\s*[^;\n]+",
+    "EMPLOYEE_NUMBER": r"\b(?:employee|emp)\s*(?:number|no|id)\s*[:#=-]?\s*[A-Z0-9/-]+",
+    "PAYROLL_ID": r"\bpayroll\s*(?:id|number|no)\s*[:#=-]?\s*[A-Z0-9/-]+",
+}
+

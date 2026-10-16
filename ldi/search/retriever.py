@@ -4,6 +4,7 @@ ClauseRetriever: Semantic search over embedded legal clauses in ChromaDB.
 from typing import List, Dict, Any
 import os
 import re
+from pathlib import Path
 from sentence_transformers import SentenceTransformer
 import chromadb
 from chromadb.config import Settings
@@ -18,6 +19,9 @@ class ClauseRetriever:
     - Detects document names in the query and boosts matches from that file.
     """
     def __init__(self, model_name: str = "all-MiniLM-L6-v2", persist_directory: str = "./chroma", collection_name: str = "clauses"):
+        if not os.path.isabs(persist_directory):
+            repository_root = Path(__file__).resolve().parents[2]
+            persist_directory = str(repository_root / persist_directory)
         # Encoder converts queries into vectors compatible with stored clause embeddings.
         self._model = SentenceTransformer(model_name)
         # Persistent Chroma client lets search survive process restarts.

@@ -8,7 +8,7 @@ import re
 
 PATTERNS = {
     "EMAIL": re.compile(r"(?<![\w.+-])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?![\w-])"),
-    "PHONE": re.compile(r"(?<!\d)(?:\+?(?:91|1)[\s.-]?)?(?:\(?\d{3,5}\)?[\s.-]?)?\d{3,5}[\s.-]?\d{4}(?!\d)"),
+    "PHONE": re.compile(r"(?<!\d)(?:\+\d{1,3}[\s.-]?)?(?:\(?\d{2,5}\)?[\s.-]?)?\d{3,5}[\s.-]\d{4,5}(?!\d)"),
     "PAN": re.compile(r"(?<![A-Z0-9])[A-Z]{5}[0-9]{4}[A-Z](?![A-Z0-9])"),
     "AADHAAR": re.compile(r"(?<!\d)\d{4}[ -]?\d{4}[ -]?\d{4}(?!\d)"),
     "PASSPORT": re.compile(r"(?i)\b(?:passport(?:\s*(?:no|number))?\s*[:#-]?\s*)?[A-Z][0-9]{7}\b"),
@@ -17,7 +17,9 @@ PATTERNS = {
     "IFSC": re.compile(r"\b[A-Z]{4}0[A-Z0-9]{6}\b"),
     "BANK_ACCOUNT": re.compile(r"(?i)\b(?:a/?c|account(?:\s+number)?|bank\s+account)\s*[:#-]?\s*\d{9,18}\b"),
     "IBAN": re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"),
-    "SWIFT": re.compile(r"\b[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b"),
+    # BICs are accepted only with an explicit label or a digit in the location/branch part.
+    # This prevents ordinary all-uppercase contract words from being treated as codes.
+    "SWIFT": re.compile(r"(?i)(?<![A-Z0-9])(?:swift|bic)(?:\s+code)?\s*[:#=-]?\s*[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?(?![A-Z0-9])|(?<![A-Z0-9])[A-Z]{4}[A-Z]{2}(?=[A-Z0-9]*\d)[A-Z0-9]{2}(?:[A-Z0-9]{3})?(?![A-Z0-9])"),
     "CREDIT_CARD": re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)"),
     "UPI_ID": re.compile(r"\b[A-Za-z0-9._-]{2,}@[A-Za-z][A-Za-z0-9.-]{1,}\b"),
     "IP_ADDRESS": re.compile(r"(?<!\d)(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?!\d)"),

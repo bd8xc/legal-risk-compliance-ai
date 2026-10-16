@@ -4,6 +4,7 @@ ClauseVectorStore: Handles persistent storage and retrieval of clause embeddings
 from typing import List, Dict, Any
 import json
 import os
+from pathlib import Path
 import numpy as np
 import chromadb
 from chromadb.config import Settings
@@ -13,6 +14,9 @@ class ClauseVectorStore:
     Stores and retrieves clause embeddings and metadata in a persistent ChromaDB collection.
     """
     def __init__(self, persist_directory: str = "./chroma", collection_name: str = "clauses"):
+        if not os.path.isabs(persist_directory):
+            repository_root = Path(__file__).resolve().parents[2]
+            persist_directory = str(repository_root / persist_directory)
         self._client = chromadb.PersistentClient(path=persist_directory, settings=Settings(allow_reset=True))
         self._collection = self._client.get_or_create_collection(collection_name)
         self._document_cache_path = os.path.join(persist_directory, "document_hash_cache.json")
@@ -58,6 +62,7 @@ class ClauseVectorStore:
         if not file_name:
             return []
 
+        self._document_cache = self._load_document_cache()
         clauses: List[Dict[str, Any]] = []
         seen_ids = set()
         file_hash = self._document_cache.get("file_name_to_hash", {}).get(file_name)
@@ -102,6 +107,7 @@ class ClauseVectorStore:
     def list_documents(self) -> List[Dict[str, Any]]:
         """Return embedded document filenames and hashes for discovery in the API."""
 
+        self._document_cache = self._load_document_cache()
         documents: List[Dict[str, Any]] = []
         for file_name, document_hash in sorted(self._document_cache.get("file_name_to_hash", {}).items()):
             documents.append({"doc_id": file_name, "document_hash": document_hash})

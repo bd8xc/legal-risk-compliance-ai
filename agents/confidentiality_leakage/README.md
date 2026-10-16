@@ -146,17 +146,17 @@ Defines the Pydantic models:
 
 ### `classifier.py`
 
-Maps finding types to sensitivity classes:
+Maps every detector-emitted finding type to one explicit sensitivity class. The policy sets are disjoint; a type cannot receive a different class because of conditional ordering:
 
-- `CRITICAL`: credentials, passwords, connection strings, bank accounts, credit cards, medical data, biometrics, trade secrets, and financial information.
-- `HIGH`: PAN, Aadhaar, passport, driving licence, GST, salary, customer or supplier lists, and research.
-- `MEDIUM`: email, phone, IP address, address, postal code, and selected confidential business categories.
-- `LOW`: types not explicitly assigned to a higher class.
-- `CONTEXT_DEPENDENT`: ORG, GPE, LOC, MONEY, and DATE.
+- `CRITICAL`: credentials, passwords, connection strings, bank accounts, credit cards, core medical data, biometrics, genetic information, trade secrets, and confidential financial information.
+- `HIGH`: PAN, Aadhaar, IBAN, passport, driving licence, GST, salary, health insurance, selected sensitive-personal categories, customer/supplier lists, and research.
+- `MEDIUM`: email, phone, IP address, address, postal code, labelled personal attributes, technical identifiers, and selected confidential business categories.
+- `LOW`: confidential contract mentions and processing-activity values if they are passed through the classifier.
+- `CONTEXT_DEPENDENT`: PERSON, ORG, GPE, LOC, MONEY, and DATE. These remain findings for traceability but contribute zero to risk scoring.
 
-NER context entities are not medium risk. They resolve to `CONTEXT_DEPENDENT` and therefore contribute zero to the score.
+Unknown detector types are deliberately retained as `LOW` until their detector contract is reviewed. This keeps the API stable without silently treating new types as context or allowing them to inflate risk.
 
-The classifier also removes duplicate and overlapping findings. A structured detector result is preferred over an NER result for the same span.
+The classifier removes duplicate findings and resolves NER-versus-structured overlaps. Distinct overlapping structured findings, such as an address containing a postal code, are preserved. A structured detector result is preferred over an NER result for the same span.
 
 ### `scorer.py`
 
@@ -224,7 +224,7 @@ Supported types include:
 - Secrets: API key, JWT, private key, access token, OAuth token, secret key, database password, connection string, AWS key, Azure key, Google API key.
 - Payment: credit card and debit-card-like numbers, with Luhn validation for card numbers.
 
-The detector uses format boundaries and nearby labels for ambiguous values. Postal codes require nearby address, PIN, postal, ZIP, or office wording. Phone numbers must contain at least ten digits. Credit-card candidates must pass the Luhn checksum.
+The detector uses format boundaries and nearby labels for ambiguous values. PAN, Aadhaar, passport, GST, IFSC, and IBAN candidates require nearby identifier or banking context; IP addresses require network context; phone numbers require contact context or an international prefix. SWIFT/BIC matches require an explicit SWIFT/BIC label or a digit in the code's location/branch portion, preventing ordinary uppercase contract words from matching. Postal codes require nearby address, PIN, postal, ZIP, or office wording. Credit-card candidates must pass the Luhn checksum.
 
 ### 7.2 `PIIDetector`
 
@@ -244,7 +244,7 @@ PII rules are deliberately label-driven to avoid treating ordinary legal words a
 - Marital status
 - Dependents or dependent information
 
-For example, `salary: 120000` is detected, while every number in a contract is not treated as salary.
+For example, `salary: 120000` is detected, while every number in a contract is not treated as salary. Labelled address matches require a numeric street-style value, so an introduction that only says an office is located in a country is not treated as an address.
 
 ### 7.3 `SensitivePersonalDetector`
 
@@ -266,6 +266,8 @@ Uses the controlled vocabulary in `dictionaries.py` to identify:
 
 These findings are categorized as `sensitive_personal_data`. Several highly sensitive types are classified as `CRITICAL`.
 
+Ambiguous terms such as `treatment` and `medication` require nearby medical context; contractual treatment of a dispute is not sufficient.
+
 ### 7.4 `ConfidentialBusinessDetector`
 
 File: `detectors/confidential_business_detector.py`
@@ -282,13 +284,15 @@ Uses `BUSINESS_CONFIDENTIAL` vocabulary from `dictionaries.py` to detect:
 
 Results are categorized as `business_confidential`. A detector match means the clause discusses the asset; it does not by itself prove that the asset has been disclosed outside its authorized audience.
 
+Ambiguous financial terms such as `pricing`, `revenue`, and `budget` require confidentiality context or an informative phrase such as `pricing model`, `revenue forecast`, or `financial statement`.
+
 ### 7.5 `ProcessingActivityDetector`
 
 File: `detectors/processing_activity_detector.py`
 
 Detects language describing personal-data handling:
 
-`collect`, `store`, `retain`, `delete`, `erase`, `share`, `transfer`, `transmit`, `process`, `third party`, `vendor`, `processor`, `cloud`, `backup`, `archive`, `cross-border transfer`, `consent`, and `purpose limitation`.
+`collect`, `store`, `retain`, `delete`, `erase`, `share`, `transfer`, `transmit`, and `process`, including common inflected forms. An action must have nearby data language such as `personal data`, `records`, `details`, or `bank`; party names and non-data actions such as transferring title are ignored. `third party` is reported only when a data-handling action is present.
 
 These results are not included in ordinary `findings`. They appear in `processing_activity` and are counted in `summary.processing_activities`. Each activity has its clause id and section, plus an `activity` normalized to lowercase.
 
@@ -300,7 +304,7 @@ NER means Named Entity Recognition. When available, the detector loads spaCy mod
 
 `PERSON`, `ORG`, `GPE`, `LOC`, `MONEY`, and `DATE`.
 
-Validation heuristics reject legal boilerplate such as `Company`, `Employee`, `Applicable Law`, `Cause`, `Agreement`, `Schedule`, `Section`, `Party`, `Receiving Party`, and `Disclosing Party`.
+Validation heuristics reject legal boilerplate and generic roles such as `Company`, `Employee`, `Vendor`, `Applicable Law`, `Cause`, `Agreement`, `Schedule`, `Section`, `Party`, `Force Majeure`, `Neither Party`, and `Disclosing Party`. Placeholder-style tokens are rejected through centralized placeholder and role rules rather than document-specific exceptions. Person candidates with address-like street context and deadline phrases such as `within thirty days` are filtered, while genuine people, companies, locations, and calendar dates remain eligible.
 
 Additional checks include:
 
